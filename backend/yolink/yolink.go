@@ -75,8 +75,7 @@ func getAccessToken() (string, error) {
 		return "", fmt.Errorf("YOLINK_CLIENT_ID and YOLINK_CLIENT_SECRET environment variables must be set")
 	}
 
-	// Create URL with param
-	eters
+	// Create URL with parameters
 	params := url.Values{}
 	params.Add("grant_type", "client_credentials")
 	params.Add("client_id", clientID)

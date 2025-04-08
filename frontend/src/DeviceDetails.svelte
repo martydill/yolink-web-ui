@@ -6,7 +6,9 @@
   let loading = false;
   let error = null;
 
-  $: deviceType = device.type.toLowerCase().replace('sensor', '').trim();
+  $: deviceType = device.type.toLowerCase();
+  $: isDoorSensor = deviceType === 'doorsensor' || deviceType === 'door';
+  $: isVibrationSensor = deviceType === 'vibrationsensor' || deviceType === 'vibration';
 
   // Battery level colors
   const getBatteryColor = (level) => {
@@ -30,6 +32,76 @@
         </svg>
       `
     };
+  };
+
+  // Get door status color and icon
+  const getDoorStatus = (state) => {
+    if (state === 'open') {
+      return {
+        color: 'text-red-500',
+        icon: `
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        `,
+        text: 'Open'
+      };
+    } else if (state === 'closed') {
+      return {
+        color: 'text-green-500',
+        icon: `
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        `,
+        text: 'Closed'
+      };
+    } else {
+      return {
+        color: 'text-yellow-500',
+        icon: `
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        `,
+        text: 'Error'
+      };
+    }
+  };
+
+  // Get vibration status color and icon
+  const getVibrationStatus = (state) => {
+    if (state === 'vibration') {
+      return {
+        color: 'text-red-500',
+        icon: `
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
+        `,
+        text: 'Vibration Detected'
+      };
+    } else if (state === 'normal') {
+      return {
+        color: 'text-green-500',
+        icon: `
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+        `,
+        text: 'Normal'
+      };
+    } else {
+      return {
+        color: 'text-yellow-500',
+        icon: `
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        `,
+        text: 'Error'
+      };
+    }
   };
 
   // Battery level icon
@@ -58,6 +130,9 @@
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       deviceState = await response.json();
+      console.log('Device State Response:', deviceState);
+      console.log('Device Type:', deviceType);
+      console.log('State Path:', deviceState?.state?.state);
     } catch (err) {
       error = err.message;
       console.error('Error:', err);
@@ -121,6 +196,24 @@
                 {@html getOnlineStatus(deviceState.online).icon}
               </div>
               <span class="ml-2">{deviceState.online ? 'Online' : 'Offline'}</span>
+            </div>
+          {/if}
+          {#if isDoorSensor && deviceState.state?.state !== undefined}
+            <div class="flex items-center space-x-2 mt-4">
+              <span class="text-gray-600 mr-2">Door:</span>
+              <div class={getDoorStatus(deviceState.state.state).color}>
+                {@html getDoorStatus(deviceState.state.state).icon}
+              </div>
+              <span class="ml-2">{getDoorStatus(deviceState.state.state).text}</span>
+            </div>
+          {/if}
+          {#if isVibrationSensor && deviceState.state?.state !== undefined}
+            <div class="flex items-center space-x-2 mt-4">
+              <span class="text-gray-600 mr-2">Vibration:</span>
+              <div class={getVibrationStatus(deviceState.state.state).color}>
+                {@html getVibrationStatus(deviceState.state.state).icon}
+              </div>
+              <span class="ml-2">{getVibrationStatus(deviceState.state.state).text}</span>
             </div>
           {/if}
           {#each Object.entries(deviceState) as [key, value]}
