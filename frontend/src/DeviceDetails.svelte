@@ -226,6 +226,7 @@
         <h3 class="font-semibold text-gray-700">Device Information</h3>
         <p><span class="text-gray-600">Type:</span> {deviceType}</p>
         <p><span class="text-gray-600">Model:</span> {device.modelName}</p>
+        <p><span class="text-gray-600">Firmware:</span> {deviceState?.state?.version || 'Unknown'}</p>
         <div class="flex items-center space-x-2">
           <span class="text-gray-600">ID:</span>
           <span class="font-mono text-sm">{device.deviceId}</span>
