@@ -5,96 +5,88 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
-	"yolink-app/yolink"
+
+	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
+	"go-svelte-app/backend/mqtt"
+	"go-svelte-app/backend/websocket"
+	"go-svelte-app/backend/yolink"
 )
 
-func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		
-		next(w, r)
-	}
-}
-
 func main() {
-	// Create a new HTTP server mux
-	mux := http.NewServeMux()
+	// Load environment variables
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: .env file not found")
+	}
 
-	// Serve static files from the frontend build directory
-	fs := http.FileServer(http.Dir(filepath.Join("..", "frontend", "public")))
-	mux.Handle("/", fs)
+	// Initialize MQTT client
+	if err := mqtt.Init(); err != nil {
+		log.Fatalf("Failed to initialize MQTT client: %v", err)
+	}
 
-	// API endpoints
-	mux.HandleFunc("/api/hello", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"message": "Hello from Go backend!"}`))
-	}))
+	// Start WebSocket broadcaster
+	go websocket.StartBroadcaster()
 
-	mux.HandleFunc("/api/devices", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+	// Create router
+	r := mux.NewRouter()
 
-		devices, err := yolink.GetDevices()
-		if err != nil {
-			log.Printf("Error getting devices: %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	// CORS middleware
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 
-		if err := json.NewEncoder(w).Encode(devices); err != nil {
-			log.Printf("Error encoding response: %v", err)
-			http.Error(w, "Error encoding response", http.StatusInternalServerError)
-			return
-		}
-	}))
+	// API routes
+	r.HandleFunc("/api/devices", getDevices).Methods("GET")
+	r.HandleFunc("/api/devices/state", getDeviceState).Methods("GET")
+	r.HandleFunc("/ws", websocket.HandleConnections)
 
-	mux.HandleFunc("/api/devices/state", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		if r.Method != "GET" {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		deviceID := r.URL.Query().Get("deviceId")
-		deviceType := r.URL.Query().Get("deviceType")
-		if deviceID == "" || deviceType == "" {
-			http.Error(w, "Device ID and type are required", http.StatusBadRequest)
-			return
-		}
-
-		state, err := yolink.GetDeviceState(deviceID, deviceType)
-		if err != nil {
-			log.Printf("Error getting device state: %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(state); err != nil {
-			log.Printf("Error encoding response: %v", err)
-			http.Error(w, "Error encoding response", http.StatusInternalServerError)
-		}
-	}))
-
-	// Start the server
+	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
+	log.Printf("Server starting on port %s", port)
+	log.Fatal(http.ListenAndServe(":"+port, r))
+}
 
-	log.Printf("Server starting on port %s...", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		log.Fatal(err)
+func getDevices(w http.ResponseWriter, r *http.Request) {
+	devices, err := yolink.GetDevices()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	json.NewEncoder(w).Encode(devices)
+}
+
+func getDeviceState(w http.ResponseWriter, r *http.Request) {
+	deviceID := r.URL.Query().Get("deviceId")
+	deviceType := r.URL.Query().Get("deviceType")
+	if deviceID == "" || deviceType == "" {
+		http.Error(w, "deviceId and deviceType are required", http.StatusBadRequest)
+		return
+	}
+
+	// First try to get state from MQTT cache
+	state := mqtt.GetDeviceState(deviceID)
+	if state != nil {
+		json.NewEncoder(w).Encode(state)
+		return
+	}
+
+	// If not in cache, fetch from YoLink API
+	state, err := yolink.GetDeviceState(deviceID, deviceType)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(state)
 } 

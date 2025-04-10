@@ -1,10 +1,13 @@
 <script>
+  import { onDestroy } from 'svelte';
+
   export let device;
   export let onClose;
 
   let deviceState = null;
   let loading = false;
   let error = null;
+  let ws = null;
 
   $: deviceType = device.type.toLowerCase();
   $: isDoorSensor = deviceType === 'doorsensor' || deviceType === 'door';
@@ -130,9 +133,6 @@
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       deviceState = await response.json();
-      console.log('Device State Response:', deviceState);
-      console.log('Device Type:', deviceType);
-      console.log('State Path:', deviceState?.state?.state);
     } catch (err) {
       error = err.message;
       console.error('Error:', err);
@@ -140,8 +140,71 @@
     loading = false;
   }
 
-  // Fetch device state when component mounts
+  function setupWebSocket() {
+    if (ws) {
+      ws.close();
+    }
+
+    // Determine the WebSocket URL based on the current protocol
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.hostname}:8080/ws`;
+    
+    console.log('Connecting to WebSocket at:', wsUrl);
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('WebSocket connection established');
+    };
+
+    ws.onmessage = (event) => {
+      console.log('WebSocket message received:', event.data);
+      try {
+        const update = JSON.parse(event.data);
+        console.log('Parsed update:', update);
+        if (update.deviceId === device.deviceId) {
+          console.log('Updating device state for:', device.deviceId);
+          // Format the received state to match our expected structure
+          deviceState = {
+            online: update.state.online ?? deviceState?.online,
+            state: {
+              state: update.state.data?.state ?? update.state.state,
+              battery: update.state.data?.battery ?? update.state.battery ?? deviceState?.state?.battery
+            }
+          };
+          console.log('Updated device state:', deviceState);
+        }
+      } catch (err) {
+        console.error('Error parsing WebSocket message:', err);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      error = 'WebSocket connection error';
+    };
+
+    ws.onclose = (event) => {
+      console.log('WebSocket connection closed:', event.code, event.reason);
+      // Attempt to reconnect after 5 seconds
+      if (!event.wasClean) {
+        setTimeout(() => {
+          console.log('Attempting to reconnect WebSocket...');
+          setupWebSocket();
+        }, 5000);
+      }
+    };
+  }
+
+  // Fetch device state and setup WebSocket when component mounts
   fetchDeviceState();
+  setupWebSocket();
+
+  // Cleanup WebSocket when component is destroyed
+  onDestroy(() => {
+    if (ws) {
+      ws.close();
+    }
+  });
 </script>
 
 <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
@@ -188,7 +251,7 @@
     {:else if deviceState}
       <div class="mt-6">
         <h3 class="font-semibold text-gray-700 mb-2">Device State</h3>
-        <div class="bg-gray-50 rounded-lg p-4">
+        <div class="bg-gray-50 rounded-lg p-4 space-y-4">
           {#if deviceState.online !== undefined}
             <div class="flex items-center space-x-2">
               <span class="text-gray-600 mr-2">Status:</span>
@@ -198,8 +261,19 @@
               <span class="ml-2">{deviceState.online ? 'Online' : 'Offline'}</span>
             </div>
           {/if}
+
+          {#if deviceState.state?.battery !== undefined}
+            <div class="flex items-center">
+              <span class="text-gray-600 mr-2">Battery:</span>
+              <div class={getBatteryColor(deviceState.state.battery)}>
+                {@html getBatteryIcon(deviceState.state.battery)}
+              </div>
+              <span class="ml-2">{deviceState.state.battery}/4</span>
+            </div>
+          {/if}
+
           {#if isDoorSensor && deviceState.state?.state !== undefined}
-            <div class="flex items-center space-x-2 mt-4">
+            <div class="flex items-center space-x-2">
               <span class="text-gray-600 mr-2">Door:</span>
               <div class={getDoorStatus(deviceState.state.state).color}>
                 {@html getDoorStatus(deviceState.state.state).icon}
@@ -207,8 +281,9 @@
               <span class="ml-2">{getDoorStatus(deviceState.state.state).text}</span>
             </div>
           {/if}
+
           {#if isVibrationSensor && deviceState.state?.state !== undefined}
-            <div class="flex items-center space-x-2 mt-4">
+            <div class="flex items-center space-x-2">
               <span class="text-gray-600 mr-2">Vibration:</span>
               <div class={getVibrationStatus(deviceState.state.state).color}>
                 {@html getVibrationStatus(deviceState.state.state).icon}
@@ -216,24 +291,6 @@
               <span class="ml-2">{getVibrationStatus(deviceState.state.state).text}</span>
             </div>
           {/if}
-          {#each Object.entries(deviceState) as [key, value]}
-            <div class="flex items-center space-x-2">
-              {#if key === 'state' && value.battery !== undefined}
-                <div class="flex items-center">
-                  <span class="text-gray-600 mr-2">Battery:</span>
-                  <div class={getBatteryColor(value.battery)}>
-                    {@html getBatteryIcon(value.battery)}
-                  </div>
-                  <span class="ml-2">{value.battery}/4</span>
-                </div>
-              {/if}
-              {#if key !== 'state' && key !== 'online'}
-                <p class="text-gray-600">
-                  <span class="font-medium">{key}:</span> {JSON.stringify(value, null, 2)}
-                </p>
-              {/if}
-            </div>
-          {/each}
         </div>
       </div>
     {/if}

@@ -7,14 +7,13 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"time"
 )
 
 const (
-	baseURL     = "https://api.yosmart.com/open/yolink/v2/api"
-	authURL     = "https://api.yosmart.com/open/yolink/token"
+	baseURL = "https://api.yosmart.com/open/yolink/v2/api"
+	authURL = "https://api.yosmart.com/open/yolink/token"
 )
 
 type Device struct {
@@ -33,12 +32,12 @@ type DeviceListData struct {
 }
 
 type DeviceListResponse struct {
-	Code    string        `json:"code"`
-	Time    int64        `json:"time"`
-	MsgID   int64        `json:"msgid"`
-	Method  string       `json:"method"`
-	Desc    string       `json:"desc"`
-	Data    DeviceListData `json:"data"`
+	Code   string         `json:"code"`
+	Time   int64          `json:"time"`
+	MsgID  int64          `json:"msgid"`
+	Method string         `json:"method"`
+	Desc   string         `json:"desc"`
+	Data   DeviceListData `json:"data"`
 }
 
 type TokenResponse struct {
@@ -50,12 +49,12 @@ type TokenResponse struct {
 }
 
 type DeviceStateResponse struct {
-	Code    string                 `json:"code"`
-	Time    int64                 `json:"time"`
-	MsgID   int64                 `json:"msgid"`
-	Method  string                `json:"method"`
-	Desc    string                `json:"desc"`
-	Data    map[string]interface{} `json:"data"`
+	Code   string                 `json:"code"`
+	Time   int64                  `json:"time"`
+	MsgID  int64                  `json:"msgid"`
+	Method string                 `json:"method"`
+	Desc   string                 `json:"desc"`
+	Data   map[string]interface{} `json:"data"`
 }
 
 var (
@@ -63,74 +62,57 @@ var (
 	tokenExpiry time.Time
 )
 
-func getAccessToken() (string, error) {
-	// If we have a token and it's not expired, return it
-	if accessToken != "" && time.Now().Before(tokenExpiry) {
+// GetAccessToken retrieves the access token from the YoLink API
+func GetAccessToken() (string, error) {
+	// Check if we have a valid token in cache
+	if accessToken != "" && time.Since(tokenExpiry) < 0 {
 		return accessToken, nil
 	}
 
-	clientID := os.Getenv("YOLINK_CLIENT_ID")
-	clientSecret := os.Getenv("YOLINK_CLIENT_SECRET")
-	if clientID == "" || clientSecret == "" {
-		return "", fmt.Errorf("YOLINK_CLIENT_ID and YOLINK_CLIENT_SECRET environment variables must be set")
+	// Get new token
+	payload := map[string]string{
+		"grant_type":    "client_credentials",
+		"client_id":     os.Getenv("YOLINK_CLIENT_ID"),
+		"client_secret": os.Getenv("YOLINK_CLIENT_SECRET"),
 	}
 
-	// Create URL with parameters
-	params := url.Values{}
-	params.Add("grant_type", "client_credentials")
-	params.Add("client_id", clientID)
-	params.Add("client_secret", clientSecret)
-	authURLWithParams := authURL + "?" + params.Encode()
-
-	// Debug: Print the request details
-	log.Printf("Making auth request to: %s", authURLWithParams)
-
-	req, err := http.NewRequest("POST", authURLWithParams, nil)
+	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %v", err)
+		return "", fmt.Errorf("error marshaling payload: %v", err)
 	}
 
-	req.Header.Add("Accept", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := http.Post(
+		"https://api.yosmart.com/open/yolink/token",
+		"application/json",
+		bytes.NewBuffer(jsonData),
+	)
 	if err != nil {
-		return "", fmt.Errorf("failed to make request: %v", err)
+		return "", fmt.Errorf("error making token request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %v", err)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("token request failed with status: %d", resp.StatusCode)
 	}
 
-	// Debug: Print the response body
-	log.Printf("Auth Response: %s", string(body))
-
-	var tokenResp TokenResponse
-	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return "", fmt.Errorf("failed to parse auth response: %v, body: %s", err, string(body))
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"`
 	}
 
-	// Check if authentication was successful
-	if tokenResp.Code != 0 {
-		return "", fmt.Errorf("authentication failed: %s (code: %d)", tokenResp.Message, tokenResp.Code)
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return "", fmt.Errorf("error decoding token response: %v", err)
 	}
 
-	if tokenResp.AccessToken == "" {
-		return "", fmt.Errorf("authentication failed: no access token received")
-	}
-
-	// Set the token and its expiry time (using 90% of the actual expiry time to be safe)
+	// Update cache
 	accessToken = tokenResp.AccessToken
-	tokenExpiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn*9/10) * time.Second)
-	
-	log.Printf("New token obtained, expires at: %v", tokenExpiry)
+	tokenExpiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+
 	return accessToken, nil
 }
 
 func GetDevices() ([]Device, error) {
-	token, err := getAccessToken()
+	token, err := GetAccessToken()
 	if err != nil {
 		// Clear the access token on auth failure
 		accessToken = ""
@@ -199,7 +181,7 @@ func GetDevices() ([]Device, error) {
 
 func GetDeviceState(deviceID string, deviceType string) (map[string]interface{}, error) {
 	// First get the access token for the Authorization header
-	token, err := getAccessToken()
+	token, err := GetAccessToken()
 	if err != nil {
 		return nil, fmt.Errorf("authentication required: %v", err)
 	}
@@ -228,7 +210,7 @@ func GetDeviceState(deviceID string, deviceType string) (map[string]interface{},
 		"method":       deviceType + ".getState",
 		"timestamp":    time.Now().Unix(),
 		"targetDevice": deviceID,
-		"token":        deviceToken,  // Add the device token to the payload
+		"token":        deviceToken, // Add the device token to the payload
 	}
 
 	payloadBytes, err := json.Marshal(payload)
@@ -280,4 +262,71 @@ func GetDeviceState(deviceID string, deviceType string) (map[string]interface{},
 	}
 
 	return response.Data, nil
-} 
+}
+
+// GetHomeID fetches the home ID using Home.getGeneralInfo method
+func GetHomeID() (string, error) {
+	token, err := GetAccessToken()
+	if err != nil {
+		return "", fmt.Errorf("authentication required: %v", err)
+	}
+
+	// Create the request payload
+	payload := map[string]interface{}{
+		"method":    "Home.getGeneralInfo",
+		"timestamp": time.Now().Unix(),
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request payload: %v", err)
+	}
+
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", baseURL, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+token)
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Accept", "application/json")
+
+	log.Printf("Making home info request to: %s", baseURL)
+	log.Printf("With payload: %s", string(payloadBytes))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	log.Printf("Home Info Response: %s", string(body))
+
+	var response struct {
+		Code string `json:"code"`
+		Desc string `json:"desc"`
+		Data struct {
+			HomeID string `json:"id"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		return "", fmt.Errorf("failed to parse home info response: %v, body: %s", err, string(body))
+	}
+
+	if response.Code != "000000" {
+		return "", fmt.Errorf("API error: %s (code: %s)", response.Desc, response.Code)
+	}
+
+	if response.Data.HomeID == "" {
+		return "", fmt.Errorf("no home ID found in response")
+	}
+
+	return response.Data.HomeID, nil
+}
