@@ -1,4 +1,4 @@
-# YoLink Device Management Dashboard
+# YoLink Web UI
 
 A modern web application for monitoring and managing YoLink IoT devices, built with Go and Svelte, and 99% AI-generated with Cursor! 
 
@@ -35,7 +35,7 @@ This project was AI-generated and provides a user-friendly interface for monitor
 ## Project Structure
 
 ```
-go-svelte-app/
+yolink-web-ui/
 ├── backend/           # Go backend server
 │   ├── main.go       # Main application entry
 │   ├── mqtt/         # MQTT client implementation

@@ -1,4 +1,4 @@
-module go-svelte-app/backend
+module yolink-web-ui/backend
 
 go 1.21
 

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"go-svelte-app/backend/yolink"
+	"yolink-web-ui/backend/yolink"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )

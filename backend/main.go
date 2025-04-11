@@ -8,9 +8,9 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
-	"go-svelte-app/backend/mqtt"
-	"go-svelte-app/backend/websocket"
-	"go-svelte-app/backend/yolink"
+	"yolink-web-ui/backend/mqtt"
+	"yolink-web-ui/backend/websocket"
+	"yolink-web-ui/backend/yolink"
 )
 
 func main() {

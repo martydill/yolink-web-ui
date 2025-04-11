@@ -7,7 +7,7 @@
 *.test
 *.out
 /vendor/
-/go-svelte-app/backend/.env
+/yolink-web-ui/backend/.env
 
 # Svelte
 frontend/node_modules/

@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
-	"go-svelte-app/backend/mqtt"
+	"yolink-web-ui/backend/mqtt"
 )
 
 var upgrader = websocket.Upgrader{
