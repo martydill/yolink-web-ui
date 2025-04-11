@@ -229,7 +229,7 @@
         <p><span class="text-gray-600">Firmware:</span> {deviceState?.state?.version || 'Unknown'}</p>
         <div class="flex items-center space-x-2">
           <span class="text-gray-600">ID:</span>
-          <span class="font-mono text-sm">{device.deviceId}</span>
+          {device.deviceId}
         </div>
         <p><span class="text-gray-600">UDID:</span> {device.deviceUDID}</p>
       </div>
