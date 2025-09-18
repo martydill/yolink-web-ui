@@ -2,6 +2,9 @@
 
 A modern web application for monitoring and managing YoLink IoT devices, built with Go and Svelte, and 99% AI-generated with Cursor! 
 
+<img width="1213" height="918" alt="Screenshot 2025-09-17 173803" src="https://github.com/user-attachments/assets/65f0f0ab-02ca-4b01-a25f-995dd6803dab" />
+<img width="1212" height="916" alt="Screenshot 2025-09-17 173819" src="https://github.com/user-attachments/assets/c91bf2d6-34b0-4e76-a89a-7b1d39a20e9e" />
+
 ## Overview
 
 This project was AI-generated and provides a user-friendly interface for monitoring YoLink IoT devices, including door sensors and vibration sensors. The application features real-time updates via MQTT and WebSocket connections, allowing users to track device states, battery levels, and online status.
