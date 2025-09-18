@@ -19,12 +19,6 @@
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       devices = await response.json();
-      
-      // Debug: Log the actual device data structure
-      if (devices.length > 0) {
-        console.log('Device data structure:', devices[0]);
-        console.log('All device keys:', Object.keys(devices[0]));
-      }
     } catch (err) {
       error = err.message;
       console.error('Error:', err);

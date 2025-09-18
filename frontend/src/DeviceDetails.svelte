@@ -227,14 +227,6 @@
     return 'text-red-600';
   }
 
-  function getBatteryIcon(level) {
-    if (level >= 80) return '🔋'; // Full battery
-    if (level >= 60) return '🔋'; // High battery  
-    if (level >= 40) return '🔋'; // Medium battery
-    if (level >= 20) return '🪫'; // Low battery
-    return '🪫'; // Critical battery
-  }
-
   function getBatteryLevelIcon(level) {
     // Returns icon based on 0-4 scale from battery field
     if (level === 4) return '🔋'; // Full
